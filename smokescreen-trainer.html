@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smokescreen Trainer</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --border: #2a2a3a;
+    --accent: #e8ff47;
+    --accent2: #ff4757;
+    --text: #e8e8f0;
+    --muted: #5a5a7a;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    overflow: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse 60% 50% at 50% 0%, #1a1a2e 0%, transparent 70%),
+                radial-gradient(ellipse 40% 30% at 80% 80%, #0d1f0d 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 700px;
+    text-align: center;
+  }
+
+  .title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(3rem, 8vw, 6rem);
+    letter-spacing: 0.05em;
+    line-height: 1;
+    color: var(--accent);
+    text-shadow: 0 0 60px rgba(232, 255, 71, 0.3);
+    margin-bottom: 0.25rem;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 0.75rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 3rem;
+  }
+
+  /* Countdown display */
+  .countdown-ring {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    margin: 0 auto 2.5rem;
+  }
+
+  .countdown-ring svg {
+    transform: rotate(-90deg);
+    width: 100%;
+    height: 100%;
+  }
+
+  .ring-bg {
+    fill: none;
+    stroke: var(--border);
+    stroke-width: 4;
+  }
+
+  .ring-progress {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-dasharray: 565;
+    stroke-dashoffset: 565;
+    transition: stroke-dashoffset 1s linear, stroke 0.3s;
+    filter: drop-shadow(0 0 8px rgba(232,255,71,0.8));
+  }
+
+  .countdown-inner {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+  }
+
+  .countdown-number {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 5rem;
+    line-height: 1;
+    color: var(--text);
+    transition: all 0.3s;
+  }
+
+  .countdown-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  /* Objection display */
+  .objection-display {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 2.5rem;
+    min-height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .objection-display::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--accent);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .objection-display.active::before { opacity: 1; }
+
+  .objection-type {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 1.8rem;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.4s;
+  }
+
+  .objection-type.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .standby-text {
+    color: var(--muted);
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  /* Buttons */
+  .buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    margin-bottom: 2rem;
+  }
+
+  .btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 2.5rem;
+    width: 90px;
+    height: 90px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+
+  .btn-label {
+    font-size: 0.55rem;
+    letter-spacing: 0.2em;
+    color: var(--muted);
+    text-transform: uppercase;
+    font-family: 'DM Mono', monospace;
+    margin-top: 2px;
+  }
+
+  .btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(232,255,71,0.15);
+  }
+
+  .btn:active { transform: translateY(0); }
+
+  .btn.pressed {
+    background: rgba(232,255,71,0.1);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Type grid */
+  .types-grid {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .type-chip {
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 0.3rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    color: var(--muted);
+    transition: all 0.3s;
+  }
+
+  .type-chip.lit {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(232,255,71,0.08);
+    box-shadow: 0 0 12px rgba(232,255,71,0.2);
+  }
+
+  /* Flash overlay */
+  .flash {
+    position: fixed;
+    inset: 0;
+    background: var(--accent);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 10;
+    transition: opacity 0.1s;
+  }
+
+  .flash.go { opacity: 0.06; }
+
+  /* Keyboard hint */
+  .hint {
+    margin-top: 1.5rem;
+    color: var(--muted);
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .pulsing { animation: pulse 1s ease-in-out infinite; }
+</style>
+</head>
+<body>
+
+<div class="flash" id="flash"></div>
+
+<div class="container">
+  <div class="title">SMOKESCREEN</div>
+  <div class="subtitle">Sales Objection Trainer</div>
+
+  <div class="countdown-ring">
+    <svg viewBox="0 0 200 200">
+      <circle class="ring-bg" cx="100" cy="100" r="90"/>
+      <circle class="ring-progress" id="ringProgress" cx="100" cy="100" r="90"/>
+    </svg>
+    <div class="countdown-inner">
+      <div class="countdown-number" id="countdownNum">—</div>
+      <div class="countdown-label" id="countdownLabel">READY</div>
+    </div>
+  </div>
+
+  <div class="objection-display" id="objectionDisplay">
+    <span class="standby-text" id="standbyText">Press a key to get an objection</span>
+    <span class="objection-type" id="objectionType"></span>
+  </div>
+
+  <div class="buttons">
+    <button class="btn" id="btn3" onclick="startCountdown(3)">
+      3
+      <span class="btn-label">seconds</span>
+    </button>
+    <button class="btn" id="btn2" onclick="startCountdown(2)">
+      2
+      <span class="btn-label">seconds</span>
+    </button>
+    <button class="btn" id="btn1" onclick="startCountdown(1)">
+      1
+      <span class="btn-label">seconds</span>
+    </button>
+  </div>
+
+  <div class="types-grid" id="typesGrid">
+    <div class="type-chip" data-type="Busy">Busy</div>
+    <div class="type-chip" data-type="Card">Card</div>
+    <div class="type-chip" data-type="DIY">DIY</div>
+    <div class="type-chip" data-type="Have service">Have Service</div>
+    <div class="type-chip" data-type="Not interested">Not Interested</div>
+    <div class="type-chip" data-type="Not seeing bugs">Not Seeing Bugs</div>
+    <div class="type-chip" data-type="Renting">Renting</div>
+    <div class="type-chip" data-type="Third person">Third Person</div>
+  </div>
+
+  <div class="hint">Press 1, 2, or 3 on keyboard — or tap buttons above</div>
+</div>
+
+<script>
+  // ─── CONFIG ───────────────────────────────────────────────────────────────
+  // Files live in an "audio" subfolder next to this HTML file.
+  // Structure: audio/Busy 1.mp3, audio/Card 1.mp3, etc.
+  const AUDIO_FOLDER = 'audio/';
+
+  const OBJECTIONS = {
+    'Busy':           3,
+    'Card':           2,
+    'DIY':            2,
+    'Have service':   2,
+    'Not interested': 2,
+    'Not seeing bugs':7,
+    'Renting':        2,
+    'Third person':   3,
+  };
+
+  // ─── STATE ────────────────────────────────────────────────────────────────
+  let timer = null;
+  let currentAudio = null;
+
+  // ─── ELEMENTS ─────────────────────────────────────────────────────────────
+  const ring        = document.getElementById('ringProgress');
+  const numEl       = document.getElementById('countdownNum');
+  const labelEl     = document.getElementById('countdownLabel');
+  const displayEl   = document.getElementById('objectionDisplay');
+  const standbyEl   = document.getElementById('standbyText');
+  const typeEl      = document.getElementById('objectionType');
+  const flashEl     = document.getElementById('flash');
+  const chips       = document.querySelectorAll('.type-chip');
+  const circumference = 2 * Math.PI * 90; // 565.49
+
+  // ─── HELPERS ──────────────────────────────────────────────────────────────
+  function randomObjection() {
+    const keys = Object.keys(OBJECTIONS);
+    return keys[Math.floor(Math.random() * keys.length)];
+  }
+
+  function pickVariant(type) {
+    const count = OBJECTIONS[type];
+    return Math.floor(Math.random() * count) + 1;
+  }
+
+  function setRing(fraction) {
+    ring.style.strokeDashoffset = circumference * (1 - fraction);
+  }
+
+  function highlightChip(type) {
+    chips.forEach(c => {
+      c.classList.toggle('lit', c.dataset.type === type);
+    });
+  }
+
+  function clearChips() {
+    chips.forEach(c => c.classList.remove('lit'));
+  }
+
+  function showFlash() {
+    flashEl.classList.add('go');
+    setTimeout(() => flashEl.classList.remove('go'), 150);
+  }
+
+  function playObjection(type) {
+    const variant = pickVariant(type);
+    const src = `${AUDIO_FOLDER}${type} ${variant}.mp3`;
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio = null;
+    }
+    const audio = new Audio(src);
+    currentAudio = audio;
+    audio.play().catch(() => {
+      // audio not found — show error briefly
+      typeEl.textContent = type.toUpperCase() + ' ⚠ audio missing';
+    });
+  }
+
+  // ─── MAIN ─────────────────────────────────────────────────────────────────
+  function startCountdown(seconds) {
+    // Cancel any running timer
+    if (timer) { clearInterval(timer); timer = null; }
+
+    const type = randomObjection();
+    let remaining = seconds;
+
+    // Reset UI
+    highlightChip(type);
+    standbyEl.style.display = 'none';
+    typeEl.classList.remove('visible');
+    displayEl.classList.add('active');
+    setRing(1);
+    numEl.textContent = remaining;
+    labelEl.textContent = 'SECONDS';
+    numEl.classList.add('pulsing');
+
+    // Highlight pressed button
+    document.querySelectorAll('.btn').forEach(b => b.classList.remove('pressed'));
+    document.getElementById('btn' + seconds).classList.add('pressed');
+
+    timer = setInterval(() => {
+      remaining--;
+      if (remaining > 0) {
+        setRing(remaining / seconds);
+        numEl.textContent = remaining;
+      } else {
+        // FIRE
+        clearInterval(timer);
+        timer = null;
+        numEl.classList.remove('pulsing');
+        setRing(0);
+        numEl.textContent = '!';
+        labelEl.textContent = 'GO';
+        showFlash();
+
+        // Show objection text
+        typeEl.textContent = type.toUpperCase();
+        typeEl.classList.add('visible');
+
+        // Play audio
+        playObjection(type);
+
+        // Reset button style
+        document.getElementById('btn' + seconds).classList.remove('pressed');
+
+        // After 3s, reset ring label
+        setTimeout(() => {
+          numEl.textContent = '—';
+          labelEl.textContent = 'READY';
+          setRing(0);
+          ring.style.stroke = 'var(--accent)';
+        }, 3000);
+      }
+    }, 1000);
+  }
+
+  // Keyboard support
+  document.addEventListener('keydown', e => {
+    if (e.key === '1') startCountdown(1);
+    if (e.key === '2') startCountdown(2);
+    if (e.key === '3') startCountdown(3);
+  });
+</script>
+</body>
+</html>
