@@ -92,9 +92,8 @@
     stroke: var(--accent);
     stroke-width: 4;
     stroke-linecap: round;
-    stroke-dasharray: 565;
-    stroke-dashoffset: 565;
-    transition: stroke-dashoffset 1s linear, stroke 0.3s;
+    stroke-dasharray: 565.49;
+    stroke-dashoffset: 565.49;
     filter: drop-shadow(0 0 8px rgba(232,255,71,0.8));
   }
 
@@ -263,6 +262,55 @@
 
   .flash.go { opacity: 0.06; }
 
+  /* Repeat button */
+  .repeat-wrap {
+    margin-bottom: 2rem;
+  }
+
+  .btn-repeat {
+    background: transparent;
+    border: 1px dashed var(--border);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 0.6rem 1.6rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  .btn-repeat.available {
+    opacity: 1;
+    pointer-events: auto;
+    border-style: solid;
+    color: var(--text);
+  }
+
+  .btn-repeat.available:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(232,255,71,0.05);
+    transform: translateY(-1px);
+  }
+
+  .btn-repeat.available:active { transform: translateY(0); }
+
+  .repeat-icon {
+    display: inline-block;
+    transition: transform 0.35s;
+  }
+
+  .btn-repeat.available:hover .repeat-icon {
+    transform: rotate(180deg);
+  }
+
   /* Keyboard hint */
   .hint {
     margin-top: 1.5rem;
@@ -319,6 +367,14 @@
     </button>
   </div>
 
+
+  <div class="repeat-wrap">
+    <button class="btn-repeat" id="btnRepeat" onclick="repeatLast()">
+      <span class="repeat-icon">↺</span>
+      <span id="repeatLabel">repeat last</span>
+    </button>
+  </div>
+
   <div class="types-grid" id="typesGrid">
     <div class="type-chip" data-type="Busy">Busy</div>
     <div class="type-chip" data-type="Card">Card</div>
@@ -330,7 +386,7 @@
     <div class="type-chip" data-type="Third person">Third Person</div>
   </div>
 
-  <div class="hint">Press 1, 2, or 3 on keyboard — or tap buttons above</div>
+  <div class="hint">Press 1, 2, 3 on keyboard — R to repeat</div>
 </div>
 
 <script>
@@ -351,19 +407,21 @@
   };
 
   // ─── STATE ────────────────────────────────────────────────────────────────
-  let timer = null;
+  let rafId        = null;
   let currentAudio = null;
+  let lastType     = null;
+  let lastSeconds  = null;
 
   // ─── ELEMENTS ─────────────────────────────────────────────────────────────
-  const ring        = document.getElementById('ringProgress');
-  const numEl       = document.getElementById('countdownNum');
-  const labelEl     = document.getElementById('countdownLabel');
-  const displayEl   = document.getElementById('objectionDisplay');
-  const standbyEl   = document.getElementById('standbyText');
-  const typeEl      = document.getElementById('objectionType');
-  const flashEl     = document.getElementById('flash');
-  const chips       = document.querySelectorAll('.type-chip');
-  const circumference = 2 * Math.PI * 90; // 565.49
+  const ring          = document.getElementById('ringProgress');
+  const numEl         = document.getElementById('countdownNum');
+  const labelEl       = document.getElementById('countdownLabel');
+  const displayEl     = document.getElementById('objectionDisplay');
+  const standbyEl     = document.getElementById('standbyText');
+  const typeEl        = document.getElementById('objectionType');
+  const flashEl       = document.getElementById('flash');
+  const chips         = document.querySelectorAll('.type-chip');
+  const CIRCUMFERENCE = 2 * Math.PI * 90; // 565.486…
 
   // ─── HELPERS ──────────────────────────────────────────────────────────────
   function randomObjection() {
@@ -372,22 +430,16 @@
   }
 
   function pickVariant(type) {
-    const count = OBJECTIONS[type];
-    return Math.floor(Math.random() * count) + 1;
+    return Math.floor(Math.random() * OBJECTIONS[type]) + 1;
   }
 
   function setRing(fraction) {
-    ring.style.strokeDashoffset = circumference * (1 - fraction);
+    // fraction: 1 = full, 0 = empty
+    ring.style.strokeDashoffset = CIRCUMFERENCE * (1 - Math.max(0, Math.min(1, fraction)));
   }
 
   function highlightChip(type) {
-    chips.forEach(c => {
-      c.classList.toggle('lit', c.dataset.type === type);
-    });
-  }
-
-  function clearChips() {
-    chips.forEach(c => c.classList.remove('lit'));
+    chips.forEach(c => c.classList.toggle('lit', c.dataset.type === type));
   }
 
   function showFlash() {
@@ -396,76 +448,160 @@
   }
 
   function playObjection(type) {
-    const variant = pickVariant(type);
-    const src = `${AUDIO_FOLDER}${type} ${variant}.mp3`;
-    if (currentAudio) {
-      currentAudio.pause();
-      currentAudio = null;
-    }
+    const src = `${AUDIO_FOLDER}${type} ${pickVariant(type)}.mp3`;
+    if (currentAudio) { currentAudio.pause(); currentAudio = null; }
     const audio = new Audio(src);
     currentAudio = audio;
     audio.play().catch(() => {
-      // audio not found — show error briefly
       typeEl.textContent = type.toUpperCase() + ' ⚠ audio missing';
     });
   }
 
+  function cancelRaf() {
+    if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+  }
+
   // ─── MAIN ─────────────────────────────────────────────────────────────────
   function startCountdown(seconds) {
-    // Cancel any running timer
-    if (timer) { clearInterval(timer); timer = null; }
+    cancelRaf();
 
-    const type = randomObjection();
-    let remaining = seconds;
+    const type    = randomObjection();
 
-    // Reset UI
+    // Save for repeat
+    lastType    = type;
+    lastSeconds = seconds;
+    updateRepeatBtn();
+    const totalMs = seconds * 1000;
+    let startTime = null;
+    let fired     = false;
+    let lastSec   = seconds;
+
+    // Reset UI immediately
     highlightChip(type);
     standbyEl.style.display = 'none';
     typeEl.classList.remove('visible');
     displayEl.classList.add('active');
     setRing(1);
-    numEl.textContent = remaining;
+    numEl.textContent = seconds;
     labelEl.textContent = 'SECONDS';
     numEl.classList.add('pulsing');
 
-    // Highlight pressed button
     document.querySelectorAll('.btn').forEach(b => b.classList.remove('pressed'));
     document.getElementById('btn' + seconds).classList.add('pressed');
 
-    timer = setInterval(() => {
-      remaining--;
-      if (remaining > 0) {
-        setRing(remaining / seconds);
-        numEl.textContent = remaining;
-      } else {
-        // FIRE
-        clearInterval(timer);
-        timer = null;
-        numEl.classList.remove('pulsing');
-        setRing(0);
-        numEl.textContent = '!';
-        labelEl.textContent = 'GO';
-        showFlash();
+    function tick(now) {
+      if (startTime === null) startTime = now;   // capture first frame time
+      const elapsed  = now - startTime;
+      const fraction = 1 - elapsed / totalMs;
+      const secLeft  = Math.ceil((totalMs - elapsed) / 1000);
 
-        // Show objection text
-        typeEl.textContent = type.toUpperCase();
-        typeEl.classList.add('visible');
-
-        // Play audio
-        playObjection(type);
-
-        // Reset button style
-        document.getElementById('btn' + seconds).classList.remove('pressed');
-
-        // After 3s, reset ring label
-        setTimeout(() => {
-          numEl.textContent = '—';
-          labelEl.textContent = 'READY';
+      if (elapsed >= totalMs) {
+        if (!fired) {
+          fired = true;
           setRing(0);
-          ring.style.stroke = 'var(--accent)';
-        }, 3000);
+          numEl.classList.remove('pulsing');
+          numEl.textContent = '!';
+          labelEl.textContent = 'GO';
+          showFlash();
+          typeEl.textContent = type.toUpperCase();
+          typeEl.classList.add('visible');
+          playObjection(type);
+          document.getElementById('btn' + seconds).classList.remove('pressed');
+          setTimeout(() => {
+            numEl.textContent = '—';
+            labelEl.textContent = 'READY';
+          }, 2000);
+        }
+        return; // stop loop
       }
-    }, 1000);
+
+      setRing(fraction);
+
+      if (secLeft !== lastSec) {
+        lastSec = secLeft;
+        numEl.textContent = Math.max(1, secLeft);
+      }
+
+      rafId = requestAnimationFrame(tick);
+    }
+
+    rafId = requestAnimationFrame(tick);
+  }
+
+  function updateRepeatBtn() {
+    const btn = document.getElementById('btnRepeat');
+    const lbl = document.getElementById('repeatLabel');
+    if (lastType && lastSeconds) {
+      btn.classList.add('available');
+      lbl.textContent = 'repeat: ' + lastType.toLowerCase() + ' (' + lastSeconds + 's)';
+    } else {
+      btn.classList.remove('available');
+      lbl.textContent = 'repeat last';
+    }
+  }
+
+  function repeatLast() {
+    if (!lastType || !lastSeconds) return;
+    replayCountdown(lastType, lastSeconds);
+  }
+
+  // Like startCountdown but with a fixed type (no random pick)
+  function replayCountdown(fixedType, seconds) {
+    cancelRaf();
+
+    const type    = fixedType;
+    const totalMs = seconds * 1000;
+    let startTime = null;
+    let fired     = false;
+    let lastSec   = seconds;
+
+    highlightChip(type);
+    standbyEl.style.display = 'none';
+    typeEl.classList.remove('visible');
+    displayEl.classList.add('active');
+    setRing(1);
+    numEl.textContent = seconds;
+    labelEl.textContent = 'SECONDS';
+    numEl.classList.add('pulsing');
+
+    document.querySelectorAll('.btn').forEach(b => b.classList.remove('pressed'));
+    document.getElementById('btnRepeat').classList.add('pressed');
+
+    function tick(now) {
+      if (startTime === null) startTime = now;
+      const elapsed  = now - startTime;
+      const fraction = 1 - elapsed / totalMs;
+      const secLeft  = Math.ceil((totalMs - elapsed) / 1000);
+
+      if (elapsed >= totalMs) {
+        if (!fired) {
+          fired = true;
+          setRing(0);
+          numEl.classList.remove('pulsing');
+          numEl.textContent = '!';
+          labelEl.textContent = 'GO';
+          showFlash();
+          typeEl.textContent = type.toUpperCase();
+          typeEl.classList.add('visible');
+          playObjection(type);
+          document.getElementById('btnRepeat').classList.remove('pressed');
+          setTimeout(() => {
+            numEl.textContent = '—';
+            labelEl.textContent = 'READY';
+          }, 2000);
+        }
+        return;
+      }
+
+      setRing(fraction);
+      if (secLeft !== lastSec) {
+        lastSec = secLeft;
+        numEl.textContent = Math.max(1, secLeft);
+      }
+      rafId = requestAnimationFrame(tick);
+    }
+
+    rafId = requestAnimationFrame(tick);
   }
 
   // Keyboard support
@@ -473,7 +609,9 @@
     if (e.key === '1') startCountdown(1);
     if (e.key === '2') startCountdown(2);
     if (e.key === '3') startCountdown(3);
+    if (e.key === 'r' || e.key === 'R') repeatLast();
   });
 </script>
 </body>
 </html>
+
